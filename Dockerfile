@@ -1,36 +1,22 @@
-# Use the official Golang image as the builder
 FROM golang:1.20.3-alpine as builder
 
-# Enable CGO to use C libraries (set to 0 to disable it)
-# We set it to 0 to build a fully static binary for our final image
-ENV CGO_ENABLED=0
-
-# Set the working directory
 WORKDIR /app
+RUN go env -w GOMODCACHE=/root/.cache/go-build
 
-# Copy the Go Modules manifests (go.mod and go.sum files)
 COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
-# Download the dependencies
-RUN go mod download
-
-# Copy the source code
 COPY . .
+RUN --mount=type=cache,target=/root/.cache/go-build go build -ldflags "-w -s" -o /app/ChatGPT-To-API .
 
-# Build the Go application and output the binary to /app/ChatGPT-Proxy-V4
-RUN go build -o /app/ChatGPT-To-API .
+FROM alpine
 
-# Use a scratch image as the final distroless image
-FROM scratch
-
-# Set the working directory
 WORKDIR /app
 
-# Copy the built Go binary from the builder stage
-COPY --from=builder /app/ChatGPT-To-API /app/ChatGPT-To-API
+COPY --from=builder /app/ChatGPT-To-API .
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Shanghai
 
-# Expose the port where the application is running
 EXPOSE 8080
 
-# Start the application
-CMD [ "./ChatGPT-To-API" ]
+CMD [ "/app/ChatGPT-To-API" ]
