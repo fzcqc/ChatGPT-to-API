@@ -57,10 +57,14 @@ func AppendIfNone(slice []string, i string) []string {
 	return append(slice, i)
 }
 
-func getSecret() (string, string) {
-	account := validAccounts[0]
-	validAccounts = append(validAccounts[1:], account)
-	return ACCESS_TOKENS.GetSecret(account)
+func getSecret() (string, tokens.Secret) {
+	if len(validAccounts) != 0 {
+		account := validAccounts[0]
+		validAccounts = append(validAccounts[1:], account)
+		return account, ACCESS_TOKENS.GetSecret(account)
+	} else {
+		return "", tokens.Secret{}
+	}
 }
 
 // Read accounts.txt and create a list of accounts
@@ -75,6 +79,9 @@ func readAccounts() {
 		for scanner.Scan() {
 			// Split by :
 			line := strings.Split(scanner.Text(), ":")
+			if len(line) < 2 {
+				continue
+			}
 			// Create an account
 			account := Account{
 				Email:    line[0],
@@ -141,7 +148,7 @@ func scheduleTokenPUID() {
 						}
 					}
 				tokenProcess:
-					token, _ = ACCESS_TOKENS.GetSecret(account.Email)
+					token = ACCESS_TOKENS.GetSecret(account.Email).Token
 					expireTime, err := getTokenExpire(token)
 					nowTime := time.Now()
 					if err != nil {
@@ -163,7 +170,7 @@ func scheduleTokenPUID() {
 					if toExpire > 0 {
 						validAccounts = AppendIfNone(validAccounts, account.Email)
 						f := newTimeFunc(account, nil, true)
-						time.AfterFunc(toExpire, f)
+						time.AfterFunc(toExpire+time.Second, f)
 					} else {
 						updateSingleToken(account, nil, true)
 					}
@@ -226,7 +233,7 @@ func updateSingleToken(account Account, token_list map[string]tokens.Secret, cro
 	}
 	if cron {
 		f := newTimeFunc(account, token_list, cron)
-		time.AfterFunc(interval, f)
+		time.AfterFunc(interval+time.Second, f)
 	}
 }
 
